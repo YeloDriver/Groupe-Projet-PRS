@@ -36,7 +36,7 @@ int main(int argc, char *argv[]) {
     sprintf(msg_port_char, "%d", msg_port);
     char buffer[RCVSIZE];
     char SYN[] = "SYN";
-    char SYNACK_port[13] = "SYN-ACK";
+    char SYNACK_port[12] = "SYN-ACK";
     for (int i = 0; i <= 4; i++) {
         SYNACK_port[i+7] = msg_port_char[i];
     }
@@ -93,7 +93,7 @@ int main(int argc, char *argv[]) {
     }
     printf("SYN Received\n");
 
-    int synack = sendto(listen_socket, "SYN-ACK6000", RCVSIZE,
+    int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
                         0, (struct sockaddr *) &listen_client, sizeof(listen_client));
     if (synack < 0)
         perror("SYN-ACK send failed");
