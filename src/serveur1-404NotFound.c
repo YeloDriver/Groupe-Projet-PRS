@@ -26,7 +26,7 @@ struct Sendpack {
 
 int main(int argc, char *argv[]) {
 
-    struct sockaddr_in listen_addr, msg_addr, listen_client,msg_client ;
+    struct sockaddr_in listen_addr, msg_addr,listen_client,msg_client ;
     int listen_port = atoi(argv[1]);
     int msg_port = 6000;
     int file_name_size=32;
@@ -62,7 +62,7 @@ int main(int argc, char *argv[]) {
     memset((char*)&listen_addr, 0, sizeof(listen_addr));
     listen_addr.sin_family = AF_INET;
     listen_addr.sin_port = htons(listen_port);
-    listen_addr.sin_addr.s_addr = INADDR_ANY;
+    listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
     memset((char*)&msg_addr, 0, sizeof(msg_addr));
     msg_addr.sin_family = AF_INET;
