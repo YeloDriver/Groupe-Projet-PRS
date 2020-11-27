@@ -68,6 +68,10 @@ int main(int argc, char *argv[]) {
     msg_addr.sin_family = AF_INET;
     msg_addr.sin_port = htons(msg_port);
     msg_addr.sin_addr.s_addr = htonl(INADDR_ANY);
+
+    struct sockaddr_in listen_client_addr;
+    memset((char*)&listen_client, 0, sizeof(listen_client_addr));
+    socklen_t len_listen_client_addr = sizeof(listen_client_addr);
     
     if (bind(listen_socket, (struct sockaddr *) &listen_addr, sizeof(listen_addr)) == -1) {
         perror("listen socket bind failed\n");
@@ -83,26 +87,26 @@ int main(int argc, char *argv[]) {
 
     printf("Value of listen socket UDP is:%d\n", listen_socket);
 
-    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, sizeof(listen_client));
+    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
     if (strcmp(buffer, SYN) != 0) {
         return -1;
     }
     printf("SYN Received\n");
 
-    int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
+    int synack = sendto(listen_socket, "SYN-ACK6000", RCVSIZE,
                         0, (struct sockaddr *) &listen_client, sizeof(listen_client));
     if (synack < 0)
         perror("SYN-ACK send failed");
     printf("SYN-ACK Sended\n");
 
-    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, sizeof(listen_client));
+    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
     if (strcmp(buffer, ACK) != 0) {
         perror("ACK error");
         return -1;
     }
     printf("ACK Received\n");
 
-    recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, sizeof(msg_client));
+    recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_listen_client_addr);
     printf("needed file name is %s\n", file_name);
     FILE *fp = fopen(file_name, "r");
     if (fp == NULL) {
