@@ -25,7 +25,6 @@ struct Sendpack {
 } data;
 
 int main(int argc, char *argv[]) {
-
     struct sockaddr_in listen_addr, msg_addr,listen_client,msg_client ;
     int listen_port = atoi(argv[1]);
     int msg_port = 6000;
@@ -87,39 +86,76 @@ int main(int argc, char *argv[]) {
 
     printf("Value of listen socket UDP is:%d\n", listen_socket);
 
-    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
-    if (strcmp(buffer, SYN) != 0) {
-        return -1;
+    while (1){
+        recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
+        if (strcmp(buffer, SYN) != 0) {
+            return -1;
+        }
+        printf("SYN Received\n");
+
+        int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
+                            0, (struct sockaddr *) &listen_client, sizeof(listen_client));
+        if (synack < 0)
+            perror("SYN-ACK send failed");
+        printf("SYN-ACK Sended\n");
+
+        recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
+        if (strcmp(buffer, ACK) != 0) {
+            perror("ACK error");
+            return -1;
+        }
+        printf("ACK Received\n");
+
+        if(fork()==0){
+            bzero(buffer, RCVSIZE);
+            recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_listen_client_addr);
+            printf("needed file name is %s\n", file_name);
+            FILE *fp = fopen(file_name, "r");
+            if (fp == NULL) {
+                perror("open file error");
+                exit(-1);
+            }
+            printf("file opened\n");
+
+            fseek(fp,0,SEEK_END);//Mettre curseur a la fin
+            int sizeoffile = ftell(photo);
+            fseek(fp,0,SEEK_SET);//Mettre curseur au debut
+            int times = ceil(sizeoffile/(RCVSIZE-6)); //times pour envoyer
+
+            int last_ack = 0;
+            int ack_obtenu = 0;
+            int window_size = 400;
+            char sequence[6];
+
+            struct timeval socket_timeout;
+            socket_timeout.tv_sec = 0;
+    		socket_timeout.tv_usec = (int)(0.001 * rtt * pow(10,9));
+
+            setsockopt(private_socket, SOL_SOCKET, SO_RCVTIMEO, &socket_timeout, sizeof(socket_timeout));
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+
+            fclose(fp);
+            close(msg_socket);
+            printf("File : %s Transfer Successful!\n", file_name);
+        }
     }
-    printf("SYN Received\n");
-
-    int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
-                        0, (struct sockaddr *) &listen_client, sizeof(listen_client));
-    if (synack < 0)
-        perror("SYN-ACK send failed");
-    printf("SYN-ACK Sended\n");
-
-    recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
-    if (strcmp(buffer, ACK) != 0) {
-        perror("ACK error");
-        return -1;
-    }
-    printf("ACK Received\n");
-
-    recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_listen_client_addr);
-    printf("needed file name is %s\n", file_name);
-    FILE *fp = fopen(file_name, "r");
-    if (fp == NULL) {
-        perror("open file error");
-        exit(-1);
-    }
-    printf("file opened\n");
-
-
-
-
-
-    fclose(fp);
-    close(msg_socket);
-    printf("File : %s Transfer Successful!\n", file_name);
+    
+    
 }
