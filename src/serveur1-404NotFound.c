@@ -13,7 +13,7 @@
 #include <sys/shm.h>
 
 #define RCVSIZE 1024
-#define ACKSIZE 6
+#define ACKSIZE 9
 
 
 typedef struct {
@@ -140,10 +140,10 @@ int main(int argc, char *argv[]) {
             fseek(fp,0,SEEK_END);//Mettre curseur a la fin
             int sizeoffile = ftell(fp);
             fseek(fp,0,SEEK_SET);//Mettre curseur au debut
-            int times = ceil(sizeoffile/(RCVSIZE-6)); //times pour envoyer
+            int times = sizeoffile/(RCVSIZE-6) + 1; //times pour envoyer
 
             int last_ack = 0;
-            int ack_obtenu = 0;
+            int ack_obtenu = 1;
             int window_size = 400;
             char seq[6];
             char seq_obtenu[6];
@@ -153,29 +153,32 @@ int main(int argc, char *argv[]) {
             setsockopt(msg_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             
             //Commence a transmission
-            while(last_ack<=times){
-                if(last_ack<ack_obtenu){
-                    last_ack = ack_obtenu;
+            //while(last_ack!=times){
+            //    if(last_ack<ack_obtenu){
                     bzero(seq, sizeof(seq));
                     bzero(payload, sizeof(payload));
                     fread(payload, 1, sizeof(payload), fp);
                     sprintf(seq, "%06d", last_ack);
                     memcpy(&buffer_msg[0], seq, 6);
                     memcpy(&buffer_msg[6], payload, sizeof(payload));
+                    printf("%s\n", buffer_msg);
                     
                     bzero(buffer_msg, sizeof(buffer_msg));
-                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
+                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client, &len_msg_client_addr); 
                     memcpy(&buffer_ack[3], seq_obtenu, 6);
                     ack_obtenu = atoi(seq_obtenu);
-                }else{
-                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
-                    memcpy(&buffer_ack[3], seq_obtenu, 6);
-                    ack_obtenu = atoi(seq_obtenu);
-                }((
-                printf("%s\n", last_ack);
-            }
+
+                    printf("%d\n",ack_obtenu);
+                    printf("%s\n", buffer_ack);
+                // }else{
+                //     sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
+                //     recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
+                //     memcpy(&buffer_ack[3], seq_obtenu, 6);
+                //     ack_obtenu = atoi(seq_obtenu);
+                // }
+                //printf("%d\n", last_ack);
+            //}
 
             sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
             fclose(fp);
