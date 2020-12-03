@@ -34,12 +34,7 @@ int main(int argc, char *argv[]) {
     char buffer[RCVSIZE];
     char file_name[file_name_size];
     char msg_port_char[5];
-    sprintf(msg_port_char, "%d", msg_port);
     char SYN[] = "SYN";
-    char SYNACK_port[12] = "SYN-ACK";
-    for (int i = 0; i <= 4; i++) {
-        SYNACK_port[i+7] = msg_port_char[i];
-    }
     char ACK[] = "ACK";
     char FIN[] = "FIN";
     fd_set fd;
@@ -91,7 +86,6 @@ int main(int argc, char *argv[]) {
         msg_addr.sin_family = AF_INET;
         msg_addr.sin_port = htons(msg_port);
         msg_addr.sin_addr.s_addr = htonl(INADDR_ANY);
-        msg_port += 1;
 
         struct sockaddr_in msg_client_addr;
         memset((char*)&msg_client, 0, sizeof(msg_client_addr));
@@ -106,6 +100,12 @@ int main(int argc, char *argv[]) {
         //Estimer RTT
         struct timeval t1,t2;
         gettimeofday(&t1,NULL);
+        
+        sprintf(msg_port_char, "%d", msg_port);
+        char SYNACK_port[12] = "SYN-ACK";
+        for (int i = 0; i <= 4; i++) {
+            SYNACK_port[i+7] = msg_port_char[i];
+        }
         int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
                             0, (struct sockaddr *) &listen_client, sizeof(listen_client));
         if (synack < 0){
@@ -122,6 +122,8 @@ int main(int argc, char *argv[]) {
 
         
         printf("ACK Received\n");
+
+        msg_port += 1;
 
         if(fork()==0){
             char buffer_msg[RCVSIZE];
