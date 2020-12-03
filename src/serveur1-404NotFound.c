@@ -42,6 +42,7 @@ int main(int argc, char *argv[]) {
     }
     char ACK[] = "ACK";
     char FIN[] = "FIN";
+    fd_set fd;
     
 
     //create listen socket
@@ -103,7 +104,7 @@ int main(int argc, char *argv[]) {
         }
 
         //Estimer RTT
-        struct timeval t1,t2,timeout;
+        struct timeval t1,t2;
         gettimeofday(&t1,NULL);
         int synack = sendto(listen_socket, SYNACK_port, RCVSIZE,
                             0, (struct sockaddr *) &listen_client, sizeof(listen_client));
@@ -118,9 +119,7 @@ int main(int argc, char *argv[]) {
             return -1;
         }
         gettimeofday(&t2,NULL);
-        // Obtenir rtt
-        timeout.tv_sec = t2.tv_sec-t1.tv_sec;
-        timeout.tv_usec = t2.tv_usec-t1.tv_usec;
+
         
         printf("ACK Received\n");
 
@@ -155,6 +154,8 @@ int main(int argc, char *argv[]) {
             
             //Commence a transmission
             while(last_ack!=times){
+
+
                 if(last_ack==ack_obtenu){
                     last_ack ++;
                     bzero(buffer_msg, RCVSIZE);
@@ -166,11 +167,28 @@ int main(int argc, char *argv[]) {
                     sprintf(seq, "%06d", last_ack);
                     memcpy(&buffer_msg[0], seq, 6);
                     memcpy(&buffer_msg[6], payload, sizeof(payload));
-                    //printf("buffermsg = %s\n", buffer_msg);
                     
                     sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-                    int size = recvfrom(msg_socket, buffer_ack, ACKSIZE, 0 , (struct sockaddr*)&msg_client, &len_msg_client_addr); 
-                    printf("size = %d\n", size);
+                    int ret = 0;
+                    while(ret<=0){
+                        FD_ZERO(&fd);
+                        FD_SET(msg_socket,&fd);
+                        struct timeval timeout; 
+                        // Obtenir rtt
+                        timeout.tv_sec = 1;
+                        timeout.tv_usec = 0;
+                        ret = select(msg_socket+1, &fd, NULL, NULL, &timeout);
+                        if (ret < 0) {
+                            printf("select error!!!\n");
+                        }else if(ret == 0){
+                            printf("select timeout!!!\n");
+                            sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+                        }
+                    }
+                    if(FD_ISSET(msg_socket, &fd)){
+                        recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0 , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr);               
+                    }            
+                      
                     printf("buffer_ack = %s\n", buffer_ack);
 
                     for(int i = 3; i<10; i++){
