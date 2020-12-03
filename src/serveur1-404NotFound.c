@@ -31,12 +31,10 @@ int main(int argc, char *argv[]) {
     int listen_port = atoi(argv[1]);
     int msg_port = 2000;
     int file_name_size = 32;
-  
+    char buffer[RCVSIZE];
     char file_name[file_name_size];
     char msg_port_char[5];
     sprintf(msg_port_char, "%d", msg_port);
-    char buffer_msg[RCVSIZE];
-    char buffer_ack[ACKSIZE];
     char SYN[] = "SYN";
     char SYNACK_port[12] = "SYN-ACK";
     for (int i = 0; i <= 4; i++) {
@@ -76,8 +74,8 @@ int main(int argc, char *argv[]) {
 
     while (1){
         // Initialiser une nouvelle connexion de client
-        recvfrom(listen_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);    
-        if (strcmp(buffer_msg, SYN) != 0) {
+        recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);    
+        if (strcmp(buffer, SYN) != 0) {
             return -1;
         }
         printf("SYN Received\n");
@@ -114,8 +112,8 @@ int main(int argc, char *argv[]) {
         }
         printf("SYN-ACK Sended\n");
 
-        recvfrom(listen_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
-        if (strcmp(buffer_msg, ACK) != 0) {
+        recvfrom(listen_socket, buffer, RCVSIZE, 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
+        if (strcmp(buffer, ACK) != 0) {
             perror("ACK error");
             return -1;
         }
@@ -127,8 +125,10 @@ int main(int argc, char *argv[]) {
         printf("ACK Received\n");
 
         if(fork()==0){
+            char buffer_msg[RCVSIZE];
+            char buffer_ack[ACKSIZE];
             bzero(buffer_msg, RCVSIZE);
-            recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_listen_client_addr);
+            recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_msg_client_addr);
             printf("needed file name is %s\n", file_name);
             FILE *fp = fopen(file_name, "r");
             if (fp == NULL) {
@@ -142,7 +142,7 @@ int main(int argc, char *argv[]) {
             fseek(fp,0,SEEK_SET);//Mettre curseur au debut
             int times = sizeoffile/(RCVSIZE-6) + 1; //times pour envoyer
 
-            int last_ack = 0;
+            int last_ack = 1;
             int ack_obtenu = 1;
             int window_size = 400;
             char seq[6];
@@ -150,11 +150,11 @@ int main(int argc, char *argv[]) {
             char payload[RCVSIZE-6];
 
             //Set timeout on socket
-            setsockopt(msg_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
+            //setsockopt(msg_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             
             //Commence a transmission
-            //while(last_ack!=times){
-            //    if(last_ack<ack_obtenu){
+            while(last_ack!=times){
+                if(last_ack<ack_obtenu){
                     bzero(seq, sizeof(seq));
                     bzero(payload, sizeof(payload));
                     fread(payload, 1, sizeof(payload), fp);
@@ -163,24 +163,26 @@ int main(int argc, char *argv[]) {
                     memcpy(&buffer_msg[6], payload, sizeof(payload));
                     printf("%s\n", buffer_msg);
                     
-                    bzero(buffer_msg, sizeof(buffer_msg));
-                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client, &len_msg_client_addr); 
+                    //bzero(buffer_msg, sizeof(buffer_msg));
+                    sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+                    int size = recvfrom(msg_socket, buffer_ack, ACKSIZE, 0 , (struct sockaddr*)&msg_client, &len_msg_client_addr); 
+                    printf("%d\n", size);
+                    printf("%s\n", buffer_ack);
+
                     memcpy(&buffer_ack[3], seq_obtenu, 6);
                     ack_obtenu = atoi(seq_obtenu);
 
                     printf("%d\n",ack_obtenu);
-                    printf("%s\n", buffer_ack);
-                // }else{
-                //     sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
-                //     recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
-                //     memcpy(&buffer_ack[3], seq_obtenu, 6);
-                //     ack_obtenu = atoi(seq_obtenu);
-                // }
-                //printf("%d\n", last_ack);
-            //}
+                }else{
+                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
+                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), MSG_DONTWAIT , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
+                    memcpy(&buffer_ack[3], seq_obtenu, 6);
+                    ack_obtenu = atoi(seq_obtenu);
+                }
+                printf("%d\n", last_ack);
+            }
 
-            sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
+            sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
             fclose(fp);
             close(msg_socket);
             printf("File : %s Transfer Successful!\n", file_name);
