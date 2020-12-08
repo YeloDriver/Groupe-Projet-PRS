@@ -13,7 +13,7 @@
 #include <sys/shm.h>
 
 #define RCVSIZE 1024
-#define ACKSIZE 9
+#define ACKSIZE 10
 
 
 typedef struct {
@@ -164,7 +164,6 @@ int main(int argc, char *argv[]) {
                 if(last_ack==ack_obtenu){
                     last_ack ++;
                     bzero(buffer_msg, RCVSIZE);
-                    bzero(buffer_ack, ACKSIZE);
                     bzero(seq, sizeof(seq));
                     bzero(seq_obtenu, sizeof(seq_obtenu));
                     //fread(payload, 1, sizeof(payload), fp);
@@ -189,6 +188,7 @@ int main(int argc, char *argv[]) {
                             sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
                         }
                     }
+                    bzero(buffer_ack, ACKSIZE);
                     if(FD_ISSET(msg_socket, &fd)){
                         recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0 , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr);               
                     }            
@@ -210,7 +210,6 @@ int main(int argc, char *argv[]) {
             }
 
             sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-            fclose(fp);
             close(msg_socket);
             printf("File : %s Transfer Successful!\n", file_name);
         }
