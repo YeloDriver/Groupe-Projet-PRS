@@ -147,68 +147,87 @@ int main(int argc, char *argv[]) {
             fread(&file_buffer, 1, sizeoffile, fp);
             fclose(fp);
 
-            int last_ack = 0;
-            int ack_obtenu = 0;
-            int window_size = 400;
+            int last_ack = -20; //已经获得的最新的ack
+            int ack_obtenu = 0; //刚获得的ack
             char seq[6];
             char seq_obtenu[9];
+            int send_size = 20;
+            int window_head = 0;
+            int window_tail = 0;
+            int i = 0;
 
             //printf("times = %d\n", times);
             //Set timeout on socket
             //setsockopt(msg_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             
             //Commence a transmission
-            while(last_ack!=times){
-
-
-                if(last_ack==ack_obtenu){
-                    last_ack ++;
-                    bzero(buffer_msg, RCVSIZE);
-                    bzero(seq, sizeof(seq));
-                    bzero(seq_obtenu, sizeof(seq_obtenu));
-                    //fread(payload, 1, sizeof(payload), fp);
-                    sprintf(seq, "%06d", last_ack);
-                    memcpy(&buffer_msg[0], seq, 6);
-                    memcpy(&buffer_msg[6], &file_buffer[(last_ack-1)*(RCVSIZE-6)], RCVSIZE-6);
-                    
-                    sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-                    int ret = 0;
-                    while(ret<=0){
-                        FD_ZERO(&fd);
-                        FD_SET(msg_socket,&fd);
-                        struct timeval timeout; 
-                        // Obtenir rtt
-                        timeout.tv_sec = 1;
-                        timeout.tv_usec = 0;
-                        ret = select(msg_socket+1, &fd, NULL, NULL, &timeout);
-                        if (ret < 0) {
-                            printf("select error!!!\n");
-                        }else if(ret == 0){
-                            printf("select timeout!!!\n");
-                            sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+            while(ack_obtenu!=times){
+                RETRANSMISSION:
+                    if(last_ack<ack_obtenu){
+                        send_size = ack_obtenu-last_ack;
+                        if(window_head+send_size<times){
+                            window_tail = window_head+send_size;
+                        }else{
+                            window_tail = times;
                         }
+                        last_ack = ack_obtenu;
+                        for(i=window_head+1; i<window_tail+1; i++){
+                            bzero(buffer_msg, RCVSIZE);
+                            bzero(seq, sizeof(seq));
+                            bzero(seq_obtenu, sizeof(seq_obtenu));
+                            //fread(payload, 1, sizeof(payload), fp);
+                            sprintf(seq, "%06d", i);
+                            memcpy(&buffer_msg[0], seq, 6);
+                            if(i == times){
+                                memcpy(&buffer_msg[6], &file_buffer[(i-1)*(RCVSIZE-6)], sizeoffile-(times-1)*(RCVSIZE-6)+6);
+                            }else{
+                                memcpy(&buffer_msg[6], &file_buffer[(i-1)*(RCVSIZE-6)], RCVSIZE-6);
+                            }
+                            sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+                            printf("send seq = %d\n\n", i);
+                        }
+                        window_head = window_head+send_size;
+                    }else if(last_ack == ack_obtenu){
+                        bzero(buffer_msg, RCVSIZE);
+                        bzero(seq, sizeof(seq));
+                        bzero(seq_obtenu, sizeof(seq_obtenu));
+                
+                        printf(seq, "%06d", last_ack+1);
+                        memcpy(&buffer_msg[0], seq, 6);
+                        if((last_ack+1) == times){
+                            memcpy(&buffer_msg[6], &file_buffer[last_ack*(RCVSIZE-6)], sizeoffile-(times-1)*(RCVSIZE-6)+6);
+                        }else{
+                            memcpy(&buffer_msg[6], &file_buffer[last_ack*(RCVSIZE-6)], RCVSIZE-6);
+                        }
+                        sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+                        printf("receive twice ack = %d, donc envoie = %d\n\n", last_ack, last_ack+1);
+                    }
+                    printf("last_ack = %d\n", last_ack);
+                    int ret = 0;
+                    FD_ZERO(&fd);
+                    FD_SET(msg_socket,&fd);
+                    struct timeval timeout; 
+                    // Obtenir rtt
+                    timeout.tv_sec = 1;
+                    timeout.tv_usec = 0;
+                    ret = select(msg_socket+1, &fd, NULL, NULL, &timeout);
+                    if (ret < 0) {
+                        printf("select error!!!\n");
+                    }else if(ret == 0){
+                        printf("select timeout!!!\n");  
+                        goto RETRANSMISSION;              
                     }
                     bzero(buffer_ack, ACKSIZE);
                     if(FD_ISSET(msg_socket, &fd)){
                         recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0 , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr);               
                     }            
-                      
-                    printf("buffer_ack = %s\n", buffer_ack);
 
                     for(int i = 3; i<10; i++){
                         seq_obtenu[i-3] = buffer_ack[i];
                     }
                     ack_obtenu =  atoi(seq_obtenu);
                     printf("ack_obtenu = %d\n",ack_obtenu);
-                }else{
-                    sendto(msg_socket, buffer_msg, sizeof(buffer_msg), 0, (struct sockaddr*)&msg_addr, sizeof(msg_addr));
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0 , (struct sockaddr*)&msg_client_addr, &len_msg_client_addr); 
-                    memcpy(&buffer_ack[3], seq_obtenu, 6);
-                    ack_obtenu = atoi(seq_obtenu);
-                }
-                //printf("%d\n", last_ack);
             }
-
             sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
             close(msg_socket);
             printf("File : %s Transfer Successful!\n", file_name);
