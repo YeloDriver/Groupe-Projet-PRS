@@ -57,10 +57,7 @@ int main(int argc, char *argv[]) {
     listen_addr.sin_port = htons(listen_port);
     listen_addr.sin_addr.s_addr = htonl(INADDR_ANY);
 
-    struct sockaddr_in listen_client_addr;
-    memset((char*)&listen_client, 0, sizeof(listen_client_addr));
-    socklen_t len_listen_client_addr = sizeof(listen_client_addr);
-    
+
     if (bind(listen_socket, (struct sockaddr *) &listen_addr, sizeof(listen_addr)) == -1) {
         perror("listen socket bind failed\n");
         close(listen_socket);
@@ -71,6 +68,11 @@ int main(int argc, char *argv[]) {
 
     while (1){
         // Initialiser une nouvelle connexion de client
+        struct sockaddr_in listen_client_addr;
+        memset((char*)&listen_client, 0, sizeof(listen_client_addr));
+        socklen_t len_listen_client_addr = sizeof(listen_client_addr);
+    
+        bzero(buffer,sizeof(buffer));
         recvfrom(listen_socket, buffer, sizeof(buffer), 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);    
         if (strcmp(buffer, SYN) != 0) {
             return -1;
@@ -80,7 +82,7 @@ int main(int argc, char *argv[]) {
         msg_socket = socket(AF_INET, SOCK_DGRAM, 0);
         if (msg_socket < 0) {
             perror("Cannot create msg socket\n");
-        return -1;
+            return -1;
         }
 
         memset((char*)&msg_addr, 0, sizeof(msg_addr));
@@ -113,7 +115,8 @@ int main(int argc, char *argv[]) {
             perror("SYN-ACK send failed");
         }
         printf("SYN-ACK Sended\n");
-
+        
+        bzero(buffer, sizeof(buffer));
         recvfrom(listen_socket, buffer, RCVSIZE, 0, (struct sockaddr *) &listen_client, &len_listen_client_addr);
         if (strcmp(buffer, ACK) != 0) {
             perror("ACK error");
@@ -127,8 +130,11 @@ int main(int argc, char *argv[]) {
         msg_port += 1;
 
         if(fork()==0){
+            close(listen_socket);
             char buffer_msg[RCVSIZE];
             char buffer_ack[ACKSIZE];
+            double temps_utile;
+            double debit;
             bzero(buffer_msg, RCVSIZE);
             recvfrom(msg_socket, (char *) &file_name, file_name_size, 0, (struct sockaddr *) &msg_client, &len_msg_client_addr);
             printf("needed file name is %s\n", file_name);
@@ -155,12 +161,10 @@ int main(int argc, char *argv[]) {
             int window_head = 0;
             int window_tail = 0;
             int i = 0;
-
-            //printf("times = %d\n", times);
-            //Set timeout on socket
-            //setsockopt(msg_socket, SOL_SOCKET, SO_RCVTIMEO, &timeout, sizeof(timeout));
             
             //Commence a transmission
+            struct timeval t_debut, t_fin;
+            gettimeofday(&t_debut,NULL);
             while(ack_obtenu!=times){
                 RETRANSMISSION:
                 //struct timeval time_now;
@@ -176,7 +180,6 @@ int main(int argc, char *argv[]) {
                             bzero(buffer_msg, RCVSIZE);
                             bzero(seq, sizeof(seq));
                             bzero(seq_obtenu, sizeof(seq_obtenu));
-                            //fread(payload, 1, sizeof(payload), fp);
                             sprintf(seq, "%06d", i);
                             memcpy(&buffer_msg[0], seq, 6);
                             if(i == times){
@@ -185,14 +188,13 @@ int main(int argc, char *argv[]) {
                                 memcpy(&buffer_msg[6], &file_buffer[(i-1)*(RCVSIZE-6)], RCVSIZE-6);
                             }
                             sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-                            printf("send seq = %d\n\n", i);
+                            printf("Recevoir paquet avec sequence = %d\n\n", i);
                         }
                         window_head = window_head+send_size;
                     }else if(last_ack == ack_obtenu){
                         bzero(buffer_msg, RCVSIZE);
                         bzero(seq, sizeof(seq));
-                        bzero(seq_obtenu, sizeof(seq_obtenu));
-                
+                        bzero(seq_obtenu, sizeof(seq_obtenu));                
                         sprintf(seq, "%06d", last_ack+1);
                         memcpy(&buffer_msg[0], seq, 6);
                         if((last_ack+1) == times){
@@ -201,21 +203,23 @@ int main(int argc, char *argv[]) {
                             memcpy(&buffer_msg[6], &file_buffer[last_ack*(RCVSIZE-6)], RCVSIZE-6);
                         }
                         sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
-                        printf("receive twice ack = %d, donc envoie = %d\n\n", last_ack, last_ack+1);
+                        printf("Recevoir ack = %d encore une fois, sequence %d est perdu, retransmettre le paquet %d\n\n", last_ack, last_ack+1, last_ack+1);
+                    }else{
+                        printf("ACK recu est %d < ACK on a, donc on fait rien, juste attend prochain ACK.\n\n", ack_obtenu);
                     }
-                    printf("last_ack = %d\n", last_ack);
+                    //printf("last_ack = %d\n", last_ack);
                     int ret = 0;
                     FD_ZERO(&fd);
                     FD_SET(msg_socket,&fd);
                     struct timeval timeout; 
                     // Obtenir rtt
-                    timeout.tv_sec = 1;
-                    timeout.tv_usec = 0;
+                    timeout.tv_sec = 2*(t2.tv_sec-t1.tv_sec);
+                    timeout.tv_usec = 2*(t2.tv_usec-t1.tv_usec);
                     ret = select(msg_socket+1, &fd, NULL, NULL, &timeout);
                     if (ret < 0) {
-                        printf("select error!!!\n");
+                        printf("Select error!!!\n");
                     }else if(ret == 0){
-                        printf("select timeout!!!\n");  
+                        printf("Timeout!!! Retransmettre\n\n");  
                         goto RETRANSMISSION;              
                     }
                     bzero(buffer_ack, ACKSIZE);
@@ -227,12 +231,18 @@ int main(int argc, char *argv[]) {
                         seq_obtenu[i-3] = buffer_ack[i];
                     }
                     ack_obtenu =  atoi(seq_obtenu);
-                    printf("ack_obtenu = %d\n",ack_obtenu);
+                    printf("Recevoir ACK = %d\n\n",ack_obtenu);
             }
             sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr*)&msg_client, sizeof(msg_client));
+            printf("File : %s Transfer Successful!\n\n", file_name);
+            gettimeofday(&t_fin,NULL);
+            temps_utile = t_fin.tv_sec - t_debut.tv_sec + 0.000001*(t_fin.tv_usec-t_debut.tv_usec);
+            debit = sizeoffile/temps_utile;
+            printf("Debit = %03f MB/s\n", debit/(1024*1024));
+
             close(msg_socket);
-            printf("File : %s Transfer Successful!\n", file_name);
         }
+        close(msg_socket);
     }    
     
 }
