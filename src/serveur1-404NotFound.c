@@ -149,7 +149,7 @@ int main(int argc, char *argv[]) {
 
             int last_ack = -20; //已经获得的最新的ack
             int ack_obtenu = 0; //刚获得的ack
-            char seq[6];
+            char seq[7];
             char seq_obtenu[9];
             int send_size = 20;
             int window_head = 0;
@@ -163,6 +163,7 @@ int main(int argc, char *argv[]) {
             //Commence a transmission
             while(ack_obtenu!=times){
                 RETRANSMISSION:
+                //struct timeval time_now;
                     if(last_ack<ack_obtenu){
                         send_size = ack_obtenu-last_ack;
                         if(window_head+send_size<times){
@@ -192,7 +193,7 @@ int main(int argc, char *argv[]) {
                         bzero(seq, sizeof(seq));
                         bzero(seq_obtenu, sizeof(seq_obtenu));
                 
-                        printf(seq, "%06d", last_ack+1);
+                        sprintf(seq, "%06d", last_ack+1);
                         memcpy(&buffer_msg[0], seq, 6);
                         if((last_ack+1) == times){
                             memcpy(&buffer_msg[6], &file_buffer[last_ack*(RCVSIZE-6)], sizeoffile-(times-1)*(RCVSIZE-6)+6);
