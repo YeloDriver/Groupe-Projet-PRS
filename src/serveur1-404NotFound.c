@@ -27,6 +27,8 @@ struct Sendpack
     char buf[RCVSIZE];
 } data;
 
+char file_buffer[9999999999];
+
 int main(int argc, char *argv[])
 {
     struct sockaddr_in listen_addr, msg_addr, listen_client, msg_client;
@@ -35,7 +37,6 @@ int main(int argc, char *argv[])
     int file_name_size = 32;
     char buffer[RCVSIZE];
     char file_name[file_name_size];
-    char file_buffer[8000000];
     char msg_port_char[5];
     char SYN[] = "SYN";
     char ACK[] = "ACK";
