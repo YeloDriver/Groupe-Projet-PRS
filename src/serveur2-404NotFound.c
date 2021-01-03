@@ -180,16 +180,18 @@ int main(int argc, char *argv[])
             char seq[7];
             char seq_obtenu[9];
             int i = 0;
+            int repeat_time = 0;
+            int max_repeat_time = 7;
             int old_window_tail = 0;
-            int seuil = 50;
+            int ssthresh = 50;
             int max_window_size = 400;
             struct timeval timeout, new_timeout, old_timeout;
             // Obtenir rtt
-            timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);
-            timeout.tv_usec = 1.5 * (t2.tv_usec - t1.tv_usec);
+            timeout.tv_sec = 2 * (t2.tv_sec - t1.tv_sec);
+            timeout.tv_usec = 2 * (t2.tv_usec - t1.tv_usec);
             struct timeval tableau_timeout[max_window_size];
-            double parametre_timeout = 0.5;
-            int repeat_time = 0;
+            double parametre_timeout = 0.1;
+            int timeout_time = 0;
 
             gettimeofday(&t_debut, NULL);
             while (ack_obtenu != times)
@@ -201,7 +203,7 @@ int main(int argc, char *argv[])
                     window_size = 1;
                 RETRANSMISSION:
                     memset(tableau_timeout, 0, sizeof(tableau_timeout));
-                    window_tail = window_head + window_size -1;
+                    window_tail = window_head + window_size - 1;
 
                     for (i = window_head; i < window_head + window_size; i++)
                     {
@@ -232,7 +234,7 @@ int main(int argc, char *argv[])
                     {
                         tableau_timeout[i] = tableau_timeout[i + ack_obtenu - last_ack];
                     }
-                    if (window_size < seuil)
+                    if (window_size < ssthresh)
                     {
                         window_size = window_size * 2;
                     }
@@ -240,7 +242,15 @@ int main(int argc, char *argv[])
                     {
                         window_size++;
                     }
-                    old_window_tail = window_tail;
+                    if (window_tail < ack_obtenu)
+                    {
+                        old_window_tail = ack_obtenu;
+                    }
+                    else
+                    {
+                        old_window_tail = window_tail;
+                    }
+
                     window_head = window_head + ack_obtenu - last_ack;
 
                     if (window_head + window_size - 1 < times)
@@ -271,7 +281,7 @@ int main(int argc, char *argv[])
                         sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
                         gettimeofday(&t1, NULL);
                         tableau_timeout[i - ack_obtenu - 1] = t1;
-                        printf("tableau_timeout index.. = %d ",  i-ack_obtenu-1);
+                        printf("tableau_timeout index.. = %d ", i - ack_obtenu - 1);
 
                         printf("Send paquet = %d\n\n", i);
                     }
@@ -280,6 +290,7 @@ int main(int argc, char *argv[])
                 else
                 {
                     printf("ACK recu est %d < ACK on a, donc on fait rien, juste attend prochain ACK.\n\n", ack_obtenu);
+                    ack_obtenu = last_ack;
                 }
                 for (i = 0; i < 10; i++)
                 {
@@ -287,48 +298,70 @@ int main(int argc, char *argv[])
                 }
                 printf("  window_head = %d window_tail = %d, window_size = %d\n\n", window_head, window_tail, window_size);
                 //printf("last_ack = %d\n", last_ack);
-                int ret = 0;
-                FD_ZERO(&fd);
-                FD_SET(msg_socket, &fd);
 
-                old_timeout = timeout;
-                printf("timeout = %d\n", timeout.tv_usec);
-                ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
-                if (ret < 0)
+                while (repeat_time < max_repeat_time && ack_obtenu == last_ack)
                 {
-                    printf("Select error!!!\n");
-                }
-                else if (ret == 0)
-                {
-                    printf("Timeout!!! Retransmettre\n\n");
-                    repeat_time++;
-                    window_size = 1;
-                    timeout.tv_usec = old_timeout.tv_usec * 2;
-                    timeout.tv_sec = timeout.tv_sec * 2;
-                    goto RETRANSMISSION;
-                }
-                bzero(buffer_ack, ACKSIZE);
-                if (FD_ISSET(msg_socket, &fd))
-                {
-                    repeat_time = 0;
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0, (struct sockaddr *)&msg_client_addr, &len_msg_client_addr);
-                    gettimeofday(&t2, NULL);
-                }
+                    //printf("jinwhile\n");
+                    int ret = 0;
+                    FD_ZERO(&fd);
+                    FD_SET(msg_socket, &fd);
 
-                for (int i = 3; i < 10; i++)
-                {
-                    seq_obtenu[i - 3] = buffer_ack[i];
+                    old_timeout = timeout;
+                    printf("timeout = %d\n", timeout.tv_usec);
+                    ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
+                    if (ret < 0)
+                    {
+                        printf("Select error!!!\n");
+                    }
+                    else if (ret == 0)
+                    {
+                        printf("Timeout!!! Retransmettre\n\n");
+                        timeout_time++;
+                        // if (window_size == 1)
+                        // {
+                        //     window_size = 1;
+                        //     ssthresh = window_size;
+                        // }
+                        // else
+                        // {
+                        //     ssthresh = window_size/2;
+                        //     window_size = 1;
+                        // }
+                        window_size = window_size / 2 + 1;
+                        timeout.tv_usec = old_timeout.tv_usec * (1 + 0.5 / timeout_time);
+                        timeout.tv_sec = old_timeout.tv_sec * (1 + 0.5 / timeout_time);
+                        goto RETRANSMISSION;
+                    }
+                    bzero(buffer_ack, ACKSIZE);
+                    if (FD_ISSET(msg_socket, &fd))
+                    {
+                        timeout_time = 0;
+                        recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0, (struct sockaddr *)&msg_client_addr, &len_msg_client_addr);
+                        gettimeofday(&t2, NULL);
+                    }
+
+                    for (int i = 3; i < 10; i++)
+                    {
+                        seq_obtenu[i - 3] = buffer_ack[i];
+                    }
+                    ack_obtenu = atoi(seq_obtenu);
+
+                    if (ack_obtenu == last_ack)
+                    {
+                        repeat_time++;
+                    }
+                    timeout = old_timeout;
                 }
-                ack_obtenu = atoi(seq_obtenu);
+                repeat_time = 0;
 
                 if (ack_obtenu < window_tail + 1 && ack_obtenu >= window_head && ack_obtenu > last_ack)
                 {
                     new_timeout.tv_sec = t2.tv_sec - tableau_timeout[ack_obtenu - window_head].tv_sec;
-                    new_timeout.tv_usec = t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
-                    printf("new_timeout = %d t2 = %d t1 = %d index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
-                           t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
+                    new_timeout.tv_usec = 1000000 * new_timeout.tv_sec + t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
+                    printf("new_timeout = %d t2.tv.sec = %d t2.tv.usec = %d t1 = %d index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
+                           t2.tv_sec, t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
 
-                    timeout.tv_sec = parametre_timeout * old_timeout.tv_sec + (1 - parametre_timeout) * new_timeout.tv_sec;
+                    timeout.tv_sec = 0;
                     timeout.tv_usec = parametre_timeout * old_timeout.tv_usec + (1 - parametre_timeout) * new_timeout.tv_usec;
                 }
                 else
