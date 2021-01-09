@@ -154,7 +154,7 @@ int main(int argc, char *argv[]) {
             fread(&file_buffer, 1, sizeoffile, fp);
             fclose(fp);
 
-            int last_ack = -10; //已经获得的最新的ack
+            int last_ack = -30; //已经获得的最新的ack
             int ack_obtenu = 0; //刚获得的ack
             char seq[7];
             char seq_obtenu[9];
