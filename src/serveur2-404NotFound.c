@@ -358,6 +358,11 @@ int main(int argc, char *argv[])
                     }
                     timeout = old_timeout;
                 }
+                if(repeat_time == max_repeat_time){
+                    window_size = window_size / 2 + 1;
+                    repeat_time = 0;
+                    goto RETRANSMISSION;
+                }
                 repeat_time = 0;
 
                 if (ack_obtenu < window_tail + 1 && ack_obtenu >= window_head && ack_obtenu > last_ack)

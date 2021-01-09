@@ -27,6 +27,8 @@ struct Sendpack
     char buf[RCVSIZE];
 } data;
 
+float debits[4];
+
 int main(int argc, char *argv[])
 {
     struct sockaddr_in listen_addr, msg_addr, listen_client, msg_client;
@@ -35,6 +37,7 @@ int main(int argc, char *argv[])
     int file_name_size = 32;
     char buffer[RCVSIZE];
     char file_name[file_name_size];
+    FILE *fileP = fopen("debit.txt", "w");
     char msg_port_char[5];
     char SYN[] = "SYN";
     char ACK[] = "ACK";
@@ -388,6 +391,11 @@ int main(int argc, char *argv[])
             gettimeofday(&t_fin, NULL);
             temps_utile = t_fin.tv_sec - t_debut.tv_sec + 0.000001 * (t_fin.tv_usec - t_debut.tv_usec);
             debit = sizeoffile / temps_utile;
+
+            FILE *fileP = fopen("debit.txt", "a");
+            fprintf(fileP, "Debit = %03f MB/s\n", debit / (1024 * 1024));
+            fclose(fileP);
+
             printf("Debit = %03f MB/s\n", debit / (1024 * 1024));
             fclose(fp);
 
