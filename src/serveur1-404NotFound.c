@@ -12,7 +12,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-#define RCVSIZE 1024
+#define RCVSIZE 1500
 #define ACKSIZE 10
 
 typedef struct

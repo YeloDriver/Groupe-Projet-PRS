@@ -12,7 +12,7 @@
 #include <sys/ipc.h>
 #include <sys/shm.h>
 
-#define RCVSIZE 1024
+#define RCVSIZE 1500
 #define ACKSIZE 10
 
 
@@ -243,6 +243,7 @@ int main(int argc, char *argv[]) {
 
             close(msg_socket);
         }
+        memset((char*)&file_buffer, 0, sizeof(file_buffer));
         close(msg_socket);
     }    
     
