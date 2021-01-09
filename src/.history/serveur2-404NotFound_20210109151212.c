@@ -27,6 +27,7 @@ struct Sendpack
     char buf[RCVSIZE];
 } data;
 
+
 int main(int argc, char *argv[])
 {
     struct sockaddr_in listen_addr, msg_addr, listen_client, msg_client;
@@ -158,6 +159,9 @@ int main(int argc, char *argv[])
             int sizeoffile = ftell(fp);
             fseek(fp, 0, SEEK_SET);                     //Mettre curseur au debut
             int times = sizeoffile / (RCVSIZE - 6) + 1; //times pour envoyer
+            bzero(file_buffer, sizeof(file_buffer));
+            fread(&file_buffer, 1, sizeoffile, fp);
+            fclose(fp);
 
             int window_size = 1;
             int window_head = 1;
@@ -202,7 +206,7 @@ int main(int argc, char *argv[])
                     memset(tableau_timeout, 0, sizeof(tableau_timeout));
                     window_tail = window_head + window_size - 1;
 
-                    for (i = window_head; i < window_head + window_size; i++)
+            for (i = window_head; i < window_head + window_size; i++)
                     {
                         bzero(buffer_msg, RCVSIZE);
                         bzero(seq, sizeof(seq));
@@ -217,6 +221,8 @@ int main(int argc, char *argv[])
                             fread(&file_buffer, 1, sizeof(file_buffer), fp);
                             memcpy(&end_of_file[6], &file_buffer, sizeof(end_of_file) - 6);
                             sendto(msg_socket, end_of_file, sizeof(end_of_file), 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
+                                                        printf("end ==================== %d\n", sizeof(end_of_file));
+
                         }
                         else
                         {
@@ -267,7 +273,7 @@ int main(int argc, char *argv[])
                         window_tail = times;
                     }
 
-                    for (i = old_window_tail + 1; i < window_tail + 1; i++)
+for (i = old_window_tail + 1; i < window_tail + 1; i++)
                     {
                         bzero(file_buffer, sizeof(file_buffer));
                         bzero(buffer_msg, RCVSIZE);
@@ -282,6 +288,7 @@ int main(int argc, char *argv[])
                             fread(&file_buffer, 1, sizeof(file_buffer), fp);
                             memcpy(&end_of_file[6], &file_buffer, sizeof(end_of_file) - 6);
                             sendto(msg_socket, end_of_file, sizeof(end_of_file), 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
+                            printf("end ==================== %d\n", sizeof(end_of_file));
                             //printf("%s\n", end_of_file);
                         }
                         else
@@ -330,16 +337,16 @@ int main(int argc, char *argv[])
                     {
                         printf("Timeout!!! Retransmettre\n\n");
                         timeout_time++;
-                        if (window_size == 1)
-                        {
-                            window_size = 1;
-                            ssthresh = window_size;
-                        }
-                        else
-                        {
-                            ssthresh = window_size/2;
-                            window_size = 1;
-                        }
+                        // if (window_size == 1)
+                        // {
+                        //     window_size = 1;
+                        //     ssthresh = window_size;
+                        // }
+                        // else
+                        // {
+                        //     ssthresh = window_size/2;
+                        //     window_size = 1;
+                        // }
                         window_size = window_size / 2 + 1;
                         timeout.tv_usec = old_timeout.tv_usec * (1 + 0.5 / timeout_time);
                         timeout.tv_sec = old_timeout.tv_sec * (1 + 0.5 / timeout_time);
@@ -371,16 +378,14 @@ int main(int argc, char *argv[])
                 {
                     new_timeout.tv_sec = t2.tv_sec - tableau_timeout[ack_obtenu - window_head].tv_sec;
                     new_timeout.tv_usec = t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
-                    if (new_timeout.tv_usec < 0)
-                    {
-                        new_timeout.tv_sec--;
+                    if (new_timeout.tv_usec<0){
+                        new_timeout.tv_sec --;
                         new_timeout.tv_usec = 1000000 + new_timeout.tv_usec;
                     }
                     printf("new_timeout = %ld t2.tv.sec = %ld t2.tv.usec = %ld t1 = %ld index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
                            t2.tv_sec, t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
 
-                    timeout.tv_sec = parametre_timeout * old_timeout.tv_sec + (1 - parametre_timeout) * new_timeout.tv_sec;
-                    ;
+                    timeout.tv_sec = parametre_timeout * old_timeout.tv_sec + (1 - parametre_timeout) * new_timeout.tv_sec;;
                     timeout.tv_usec = parametre_timeout * old_timeout.tv_usec + (1 - parametre_timeout) * new_timeout.tv_usec;
                 }
                 else
@@ -398,7 +403,6 @@ int main(int argc, char *argv[])
             temps_utile = t_fin.tv_sec - t_debut.tv_sec + 0.000001 * (t_fin.tv_usec - t_debut.tv_usec);
             debit = sizeoffile / temps_utile;
             printf("Debit = %03f MB/s\n", debit / (1024 * 1024));
-            fclose(fp);
 
             close(msg_socket);
         }

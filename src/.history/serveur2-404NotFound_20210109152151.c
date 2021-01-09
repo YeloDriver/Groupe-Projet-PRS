@@ -330,16 +330,16 @@ int main(int argc, char *argv[])
                     {
                         printf("Timeout!!! Retransmettre\n\n");
                         timeout_time++;
-                        if (window_size == 1)
-                        {
-                            window_size = 1;
-                            ssthresh = window_size;
-                        }
-                        else
-                        {
-                            ssthresh = window_size/2;
-                            window_size = 1;
-                        }
+                        // if (window_size == 1)
+                        // {
+                        //     window_size = 1;
+                        //     ssthresh = window_size;
+                        // }
+                        // else
+                        // {
+                        //     ssthresh = window_size/2;
+                        //     window_size = 1;
+                        // }
                         window_size = window_size / 2 + 1;
                         timeout.tv_usec = old_timeout.tv_usec * (1 + 0.5 / timeout_time);
                         timeout.tv_sec = old_timeout.tv_sec * (1 + 0.5 / timeout_time);

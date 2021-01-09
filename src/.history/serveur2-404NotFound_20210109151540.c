@@ -158,6 +158,9 @@ int main(int argc, char *argv[])
             int sizeoffile = ftell(fp);
             fseek(fp, 0, SEEK_SET);                     //Mettre curseur au debut
             int times = sizeoffile / (RCVSIZE - 6) + 1; //times pour envoyer
+            bzero(file_buffer, sizeof(file_buffer));
+            fread(&file_buffer, 1, sizeoffile, fp);
+            fclose(fp);
 
             int window_size = 1;
             int window_head = 1;
@@ -217,6 +220,7 @@ int main(int argc, char *argv[])
                             fread(&file_buffer, 1, sizeof(file_buffer), fp);
                             memcpy(&end_of_file[6], &file_buffer, sizeof(end_of_file) - 6);
                             sendto(msg_socket, end_of_file, sizeof(end_of_file), 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
+                            printf("end ==================== %d\n", sizeof(end_of_file));
                         }
                         else
                         {
@@ -282,6 +286,7 @@ int main(int argc, char *argv[])
                             fread(&file_buffer, 1, sizeof(file_buffer), fp);
                             memcpy(&end_of_file[6], &file_buffer, sizeof(end_of_file) - 6);
                             sendto(msg_socket, end_of_file, sizeof(end_of_file), 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
+                            printf("end ==================== %d\n", sizeof(end_of_file));
                             //printf("%s\n", end_of_file);
                         }
                         else
