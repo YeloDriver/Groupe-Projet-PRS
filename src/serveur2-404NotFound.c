@@ -27,7 +27,7 @@ struct Sendpack
     char buf[RCVSIZE];
 } data;
 
-char file_buffer[1000000000];
+char file_buffer[2000000000];
 
 int main(int argc, char *argv[])
 {
@@ -181,7 +181,7 @@ int main(int argc, char *argv[])
             char seq_obtenu[9];
             int i = 0;
             int repeat_time = 0;
-            int max_repeat_time = 7;
+            int max_repeat_time = 4;
             int old_window_tail = 0;
             int ssthresh = 50;
             int max_window_size = 400;
@@ -190,7 +190,7 @@ int main(int argc, char *argv[])
             timeout.tv_sec = 2 * (t2.tv_sec - t1.tv_sec);
             timeout.tv_usec = 2 * (t2.tv_usec - t1.tv_usec);
             struct timeval tableau_timeout[max_window_size];
-            double parametre_timeout = 0.1;
+            double parametre_timeout = 0.3;
             int timeout_time = 0;
 
             gettimeofday(&t_debut, NULL);
@@ -294,7 +294,7 @@ int main(int argc, char *argv[])
                 }
                 for (i = 0; i < 10; i++)
                 {
-                    printf("[ %d ], ", tableau_timeout[i].tv_usec);
+                    printf("[ %ld ], ", tableau_timeout[i].tv_usec);
                 }
                 printf("  window_head = %d window_tail = %d, window_size = %d\n\n", window_head, window_tail, window_size);
                 //printf("last_ack = %d\n", last_ack);
@@ -307,7 +307,7 @@ int main(int argc, char *argv[])
                     FD_SET(msg_socket, &fd);
 
                     old_timeout = timeout;
-                    printf("timeout = %d\n", timeout.tv_usec);
+                    printf("timeout = %ld\n", timeout.tv_usec);
                     ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
                     if (ret < 0)
                     {
@@ -357,11 +357,15 @@ int main(int argc, char *argv[])
                 if (ack_obtenu < window_tail + 1 && ack_obtenu >= window_head && ack_obtenu > last_ack)
                 {
                     new_timeout.tv_sec = t2.tv_sec - tableau_timeout[ack_obtenu - window_head].tv_sec;
-                    new_timeout.tv_usec = 1000000 * new_timeout.tv_sec + t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
-                    printf("new_timeout = %d t2.tv.sec = %d t2.tv.usec = %d t1 = %d index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
+                    new_timeout.tv_usec = t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
+                    if (new_timeout.tv_usec<0){
+                        new_timeout.tv_sec --;
+                        new_timeout.tv_usec = 1000000 + new_timeout.tv_usec;
+                    }
+                    printf("new_timeout = %ld t2.tv.sec = %ld t2.tv.usec = %ld t1 = %ld index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
                            t2.tv_sec, t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
 
-                    timeout.tv_sec = 0;
+                    timeout.tv_sec = parametre_timeout * old_timeout.tv_sec + (1 - parametre_timeout) * new_timeout.tv_sec;;
                     timeout.tv_usec = parametre_timeout * old_timeout.tv_usec + (1 - parametre_timeout) * new_timeout.tv_usec;
                 }
                 else
