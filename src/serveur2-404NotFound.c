@@ -178,10 +178,10 @@ int main(int argc, char *argv[])
             int i = 0;
             char end_of_file[sizeoffile - (RCVSIZE - 6) * (times - 1) + 6];
             int repeat_time = 0;
-            int max_repeat_time = 3;
+            int max_repeat_time = 6;
             int old_window_tail = 0;
             int ssthresh = 50;
-            int max_window_size = 400;
+            int max_window_size = 256;
             struct timeval timeout, new_timeout, old_timeout;
             // Obtenir rtt
             timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);
@@ -201,8 +201,11 @@ int main(int argc, char *argv[])
                 RETRANSMISSION:
                     memset(tableau_timeout, 0, sizeof(tableau_timeout));
                     window_tail = window_head + window_size - 1;
+                    if(window_tail>times){
+                        window_tail = times;
+                    }
 
-                    for (i = window_head; i < window_head + window_size; i++)
+                    for (i = window_head; i < window_tail + 1; i++)
                     {
                         bzero(buffer_msg, RCVSIZE);
                         bzero(seq, sizeof(seq));
@@ -369,8 +372,6 @@ int main(int argc, char *argv[])
                     printf("new_timeout = %ld t2.tv.sec = %ld t2.tv.usec = %ld t1 = %ld index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
                            t2.tv_sec, t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
 
-                    timeout.tv_sec = parametre_timeout * old_timeout.tv_sec + (1 - parametre_timeout) * new_timeout.tv_sec;
-                    ;
                     timeout.tv_usec = parametre_timeout * old_timeout.tv_usec + (1 - parametre_timeout) * new_timeout.tv_usec;
                 }
                 else

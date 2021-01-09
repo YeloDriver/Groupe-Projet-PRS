@@ -35,7 +35,6 @@ int main(int argc, char *argv[])
     int file_name_size = 32;
     char buffer[RCVSIZE];
     char file_name[file_name_size];
-
     char msg_port_char[5];
     char SYN[] = "SYN";
     char ACK[] = "ACK";
@@ -107,7 +106,7 @@ int main(int argc, char *argv[])
         }
 
         //Estimer RTT
-        struct timeval t1, t2;
+        struct timeval t1, t2, t_debut, t_fin;
         gettimeofday(&t1, NULL);
 
         sprintf(msg_port_char, "%d", msg_port);
@@ -160,46 +159,61 @@ int main(int argc, char *argv[])
             fseek(fp, 0, SEEK_SET);                     //Mettre curseur au debut
             int times = sizeoffile / (RCVSIZE - 6) + 1; //times pour envoyer
 
-            int last_ack = -30; //已经获得的最新的ack
+            int window_size = 1;
+            int window_head = 1;
+            int window_tail;
+            if (window_size < times)
+            {
+                window_tail = window_head + window_size - 1;
+            }
+            else
+            {
+                window_tail = times;
+            }
+            int last_ack = 0;   //已经获得的最新的ack
             int ack_obtenu = 0; //刚获得的ack
             char seq[7];
             char seq_obtenu[9];
-            int send_size = -last_ack;
-            int window_head = 0;
-            int window_tail = 0;
+            char file_buffer[RCVSIZE - 6];
             int i = 0;
             char end_of_file[sizeoffile - (RCVSIZE - 6) * (times - 1) + 6];
-            char file_buffer[RCVSIZE - 6];
+            int repeat_time = 0;
+            int max_repeat_time = 6;
+            int old_window_tail = 0;
+            int ssthresh = 50;
+            int max_window_size = 256;
+            struct timeval timeout, new_timeout, old_timeout;
+            // Obtenir rtt
+            timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);
+            timeout.tv_usec = 1.5 * (t2.tv_usec - t1.tv_usec);
+            struct timeval tableau_timeout[max_window_size];
+            double parametre_timeout = 0.5;
+            int timeout_time = 0;
 
-            //Commence a transmission
-            struct timeval t_debut, t_fin;
             gettimeofday(&t_debut, NULL);
             while (ack_obtenu != times)
             {
-            RETRANSMISSION:
+
                 //struct timeval time_now;
-                if (last_ack < ack_obtenu)
+                if (last_ack == ack_obtenu)
                 {
-                    send_size = ack_obtenu - last_ack;
-                    if (window_head + send_size < times)
-                    {
-                        window_tail = window_head + send_size;
-                    }
-                    else
-                    {
+                    window_size = 1;
+                RETRANSMISSION:
+                    memset(tableau_timeout, 0, sizeof(tableau_timeout));
+                    window_tail = window_head + window_size - 1;
+                    if(window_tail>times){
                         window_tail = times;
                     }
-                    last_ack = ack_obtenu;
-                    for (i = window_head + 1; i < window_tail + 1; i++)
+
+                    for (i = window_head; i < window_tail + 1; i++)
                     {
                         bzero(buffer_msg, RCVSIZE);
                         bzero(seq, sizeof(seq));
                         bzero(seq_obtenu, sizeof(seq_obtenu));
-                                      bzero(file_buffer, sizeof(file_buffer));
-                        bzero(end_of_file, sizeof(end_of_file));
                         sprintf(seq, "%06d", i);
-
-                       if (i == times)
+                        bzero(file_buffer, sizeof(file_buffer));
+                        bzero(end_of_file, sizeof(end_of_file));
+                        if (i == times)
                         {
                             memcpy(&end_of_file[0], seq, 6);
                             fseek(fp, (i - 1) * (RCVSIZE - 6), SEEK_SET);
@@ -215,21 +229,59 @@ int main(int argc, char *argv[])
                             memcpy(&buffer_msg[6], &file_buffer, RCVSIZE - 6);
                             sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
                         }
-                        printf("Send paquet avec sequence = %d\n\n", i);
+                        gettimeofday(&t1, NULL);
+                        tableau_timeout[i - last_ack - 1] = t1;
+
+                        //printf("tableau_timeout = %d\n", t1.tv_usec);
+                        printf("Send paquet.. = %d\n\n", i);
                     }
-                    window_head = window_head + send_size;
                 }
-                else if (last_ack == ack_obtenu)
+                else if (last_ack < ack_obtenu)
                 {
-                    bzero(buffer_msg, RCVSIZE);
-                    bzero(seq, sizeof(seq));
-                    bzero(seq_obtenu, sizeof(seq_obtenu));
-                    sprintf(seq, "%06d", last_ack + 1);
-                    memcpy(&buffer_msg[0], seq, 6);
-                    if ((last_ack + 1) == times)
+                    for (i = 0; i < window_size - ack_obtenu + last_ack; i++)
                     {
+                        tableau_timeout[i] = tableau_timeout[i + ack_obtenu - last_ack];
+                    }
+                    if (window_size < ssthresh)
+                    {
+                        window_size = window_size * 2;
+                    }
+                    else
+                    {
+                        window_size++;
+                    }
+                    if (window_tail < ack_obtenu)
+                    {
+                        old_window_tail = ack_obtenu;
+                    }
+                    else
+                    {
+                        old_window_tail = window_tail;
+                    }
+
+                    window_head = window_head + ack_obtenu - last_ack;
+
+                    if (window_head + window_size - 1 < times)
+                    {
+                        window_tail = window_head + window_size - 1;
+                    }
+                    else
+                    {
+                        window_tail = times;
+                    }
+
+                    for (i = old_window_tail + 1; i < window_tail + 1; i++)
+                    {
+                        bzero(file_buffer, sizeof(file_buffer));
+                        bzero(buffer_msg, RCVSIZE);
+                        bzero(seq, sizeof(seq));
+                        bzero(end_of_file, sizeof(end_of_file));
+                        bzero(seq_obtenu, sizeof(seq_obtenu));
+                        sprintf(seq, "%06d", i);
+                        if (i == times)
+                        {
                             memcpy(&end_of_file[0], seq, 6);
-                            fseek(fp, last_ack * (RCVSIZE - 6), SEEK_SET);
+                            fseek(fp, (i - 1) * (RCVSIZE - 6), SEEK_SET);
                             fread(&file_buffer, 1, sizeof(file_buffer), fp);
                             memcpy(&end_of_file[6], &file_buffer, sizeof(end_of_file) - 6);
                             sendto(msg_socket, end_of_file, sizeof(end_of_file), 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
@@ -238,57 +290,107 @@ int main(int argc, char *argv[])
                         else
                         {
                             memcpy(&buffer_msg[0], seq, 6);
-                            fseek(fp, last_ack * (RCVSIZE - 6), SEEK_SET);
+                            fseek(fp, (i - 1) * (RCVSIZE - 6), SEEK_SET);
                             fread(&file_buffer, 1, RCVSIZE - 6, fp);
                             memcpy(&buffer_msg[6], &file_buffer, RCVSIZE - 6);
                             sendto(msg_socket, buffer_msg, RCVSIZE, 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
                         }
-                    printf("Recevoir ack = %d encore une fois, sequence %d est perdu, retransmettre le paquet %d\n\n", last_ack, last_ack + 1, last_ack + 1);
+                        gettimeofday(&t1, NULL);
+                        tableau_timeout[i - ack_obtenu - 1] = t1;
+                        printf("tableau_timeout index.. = %d ", i - ack_obtenu - 1);
+
+                        printf("Send paquet = %d\n\n", i);
+                    }
+                    last_ack = ack_obtenu;
                 }
                 else
                 {
                     printf("ACK recu est %d < ACK on a, donc on fait rien, juste attend prochain ACK.\n\n", ack_obtenu);
                     ack_obtenu = last_ack;
                 }
+                for (i = 0; i < 10; i++)
+                {
+                    printf("[ %ld ], ", tableau_timeout[i].tv_usec);
+                }
+                printf("  window_head = %d window_tail = %d, window_size = %d\n\n", window_head, window_tail, window_size);
                 //printf("last_ack = %d\n", last_ack);
-                int ret = 0;
-                FD_ZERO(&fd);
-                FD_SET(msg_socket, &fd);
-                struct timeval timeout;
-                // Obtenir rtt
-                timeout.tv_sec = 2 * (t2.tv_sec - t1.tv_sec);
-                timeout.tv_usec = 2 * (t2.tv_usec - t1.tv_usec);
-                ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
-                if (ret < 0)
+
+                while (repeat_time < max_repeat_time && ack_obtenu == last_ack)
                 {
-                    printf("Select error!!!\n");
+                    //printf("jinwhile\n");
+                    int ret = 0;
+                    FD_ZERO(&fd);
+                    FD_SET(msg_socket, &fd);
+
+                    old_timeout = timeout;
+                    printf("timeout = %ld\n", timeout.tv_usec);
+                    ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
+                    if (ret < 0)
+                    {
+                        printf("Select error!!!\n");
+                    }
+                    else if (ret == 0)
+                    {
+                        printf("Timeout!!! Retransmettre\n\n");
+                        timeout_time++;
+                        window_size = window_size / 2 + 1;
+                        timeout.tv_usec = old_timeout.tv_usec * (1 + 0.5 / timeout_time);
+                        timeout.tv_sec = old_timeout.tv_sec * (1 + 0.5 / timeout_time);
+                        goto RETRANSMISSION;
+                    }
+                    bzero(buffer_ack, ACKSIZE);
+                    if (FD_ISSET(msg_socket, &fd))
+                    {
+                        timeout_time = 0;
+                        recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0, (struct sockaddr *)&msg_client_addr, &len_msg_client_addr);
+                        gettimeofday(&t2, NULL);
+                    }
+
+                    for (int i = 3; i < 10; i++)
+                    {
+                        seq_obtenu[i - 3] = buffer_ack[i];
+                    }
+                    ack_obtenu = atoi(seq_obtenu);
+
+                    if (ack_obtenu == last_ack)
+                    {
+                        repeat_time++;
+                    }
+                    timeout = old_timeout;
                 }
-                else if (ret == 0)
+                repeat_time = 0;
+
+                if (ack_obtenu < window_tail + 1 && ack_obtenu >= window_head && ack_obtenu > last_ack)
                 {
-                    printf("Timeout!!! Retransmettre\n\n");
-                    goto RETRANSMISSION;
+                    new_timeout.tv_sec = t2.tv_sec - tableau_timeout[ack_obtenu - window_head].tv_sec;
+                    new_timeout.tv_usec = t2.tv_usec - tableau_timeout[ack_obtenu - window_head].tv_usec;
+                    if (new_timeout.tv_usec < 0)
+                    {
+                        new_timeout.tv_sec--;
+                        new_timeout.tv_usec = 1000000 + new_timeout.tv_usec;
+                    }
+                    printf("new_timeout = %ld t2.tv.sec = %ld t2.tv.usec = %ld t1 = %ld index = %d, ack_obtenu = %d, window_head = %d, window_size = %d\n", new_timeout.tv_usec,
+                           t2.tv_sec, t2.tv_usec, tableau_timeout[ack_obtenu - window_head].tv_usec, ack_obtenu - window_head, ack_obtenu, window_head, window_size);
+
+                    timeout.tv_usec = parametre_timeout * old_timeout.tv_usec + (1 - parametre_timeout) * new_timeout.tv_usec;
                 }
-                bzero(buffer_ack, ACKSIZE);
-                if (FD_ISSET(msg_socket, &fd))
+                else
                 {
-                    recvfrom(msg_socket, buffer_ack, sizeof(buffer_ack), 0, (struct sockaddr *)&msg_client_addr, &len_msg_client_addr);
+                    timeout = old_timeout;
                 }
 
-                for (int i = 3; i < 10; i++)
-                {
-                    seq_obtenu[i - 3] = buffer_ack[i];
-                }
-                ack_obtenu = atoi(seq_obtenu);
                 printf("Recevoir ACK = %d\n\n", ack_obtenu);
             }
+
             sendto(msg_socket, FIN, RCVSIZE, 0, (struct sockaddr *)&msg_client, sizeof(msg_client));
+
             printf("File : %s Transfer Successful!\n\n", file_name);
             gettimeofday(&t_fin, NULL);
             temps_utile = t_fin.tv_sec - t_debut.tv_sec + 0.000001 * (t_fin.tv_usec - t_debut.tv_usec);
             debit = sizeoffile / temps_utile;
             printf("Debit = %03f MB/s\n", debit / (1024 * 1024));
+            fclose(fp);
 
-            memset((char *)&file_buffer, 0, sizeof(file_buffer));
             close(msg_socket);
         }
         close(msg_socket);
