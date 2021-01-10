@@ -1,1 +1,4 @@
-Debit = 3.024391 MB/s
+Debit = 1.529740 MB/s
+Debit = 1.360841 MB/s
+Debit = 1.414357 MB/s
+Debit = 1.458051 MB/s

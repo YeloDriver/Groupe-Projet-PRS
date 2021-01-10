@@ -183,8 +183,8 @@ int main(int argc, char *argv[])
             int repeat_time = 0;
             int max_repeat_time = 6;
             int old_window_tail = 0;
-            int ssthresh = 50;
-            int max_window_size = 256;
+            int ssthresh = 70;
+            int max_window_size = 1000;
             struct timeval timeout, new_timeout, old_timeout;
             // Obtenir rtt
             timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);

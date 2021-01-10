@@ -181,16 +181,16 @@ int main(int argc, char *argv[])
             int i = 0;
             char end_of_file[sizeoffile - (RCVSIZE - 6) * (times - 1) + 6];
             int repeat_time = 0;
-            int max_repeat_time = 6;
+            int max_repeat_time = 8;
             int old_window_tail = 0;
-            int ssthresh = 50;
-            int max_window_size = 256;
+            int ssthresh = 100;
+            int max_window_size = 1000;
             struct timeval timeout, new_timeout, old_timeout;
             // Obtenir rtt
             timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);
             timeout.tv_usec = 1.5 * (t2.tv_usec - t1.tv_usec);
             struct timeval tableau_timeout[max_window_size];
-            double parametre_timeout = 0.5;
+            double parametre_timeout = 0.7;
             int timeout_time = 0;
 
             gettimeofday(&t_debut, NULL);
@@ -324,7 +324,6 @@ int main(int argc, char *argv[])
                     int ret = 0;
                     FD_ZERO(&fd);
                     FD_SET(msg_socket, &fd);
-
                     old_timeout = timeout;
                     printf("timeout = %ld\n", timeout.tv_usec);
                     ret = select(msg_socket + 1, &fd, NULL, NULL, &timeout);
@@ -361,6 +360,7 @@ int main(int argc, char *argv[])
                     }
                     timeout = old_timeout;
                 }
+                
                 repeat_time = 0;
 
                 if (ack_obtenu < window_tail + 1 && ack_obtenu >= window_head && ack_obtenu > last_ack)

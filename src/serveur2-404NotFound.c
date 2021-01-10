@@ -178,16 +178,16 @@ int main(int argc, char *argv[])
             int i = 0;
             char end_of_file[sizeoffile - (RCVSIZE - 6) * (times - 1) + 6];
             int repeat_time = 0;
-            int max_repeat_time = 6;
+            int max_repeat_time = 12;
             int old_window_tail = 0;
-            int ssthresh = 50;
-            int max_window_size = 256;
+            int ssthresh = 30;
+            int max_window_size = 1000;
             struct timeval timeout, new_timeout, old_timeout;
             // Obtenir rtt
             timeout.tv_sec = 1.5 * (t2.tv_sec - t1.tv_sec);
             timeout.tv_usec = 1.5 * (t2.tv_usec - t1.tv_usec);
             struct timeval tableau_timeout[max_window_size];
-            double parametre_timeout = 0.5;
+            double parametre_timeout = 0.9;
             int timeout_time = 0;
 
             gettimeofday(&t_debut, NULL);
@@ -393,6 +393,11 @@ int main(int argc, char *argv[])
             gettimeofday(&t_fin, NULL);
             temps_utile = t_fin.tv_sec - t_debut.tv_sec + 0.000001 * (t_fin.tv_usec - t_debut.tv_usec);
             debit = sizeoffile / temps_utile;
+      
+            FILE *fileP = fopen("debit.txt", "a");
+            fprintf(fileP, "Debit = %03f MB/s\n", debit / (1024 * 1024));
+            fclose(fileP);
+
             printf("Debit = %03f MB/s\n", debit / (1024 * 1024));
             fclose(fp);
 
